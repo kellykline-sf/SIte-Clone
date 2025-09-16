@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tableau Dashboard</title>
+    <script type="module" src="https://public.tableau.com/javascripts/api/tableau.embedding.3.latest.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f2f5;
+        }
+        .dashboard-container {
+            width: 100%;
+            max-width: 1100px; /* Or whatever maximum width you prefer */
+            height: 2200px; /* Adjust height as needed */
+            background-color: #ffffff;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        tableau-viz {
+            width: 100%;
+            height: 100%;
+        }
+        .loading-message {
+            font-size: 1.2em;
+            color: #555;
+        }
+        .error-message {
+            color: red;
+            font-size: 1.2em;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <div id="loading" class="loading-message">Loading Tableau Dashboard...</div>
+        <div id="error" class="error-message" style="display: none;"></div>
+        <tableau-viz
+            id="tableauViz"
+            hide-tabs
+            toolbar="hidden"
+            style="display: none;"
+        ></tableau-viz>
+    </div>
+
+    <script>
+        const tableauVizElement = document.getElementById('tableauViz');
+        const loadingMessage = document.getElementById('loading');
+        const errorMessage = document.getElementById('error');
+
+        const backendUrl = 'https://tab4ps-clone-606cb4c5e478.herokuapp.com/'; // Replace with your backend URL if deployed
+        const tableauCloudSiteUrl = 'https://us-west-2b.online.tableau.com'; // Base Tableau Cloud URL (no trailing slash)
+        const tableauWorkbookViewUrl = '/t/tableauforpublicsector/views/SoftwareLicensingManagement/SoftwareLicensingManagement?:iid=1'; // Path to workbook/view (starts with /)
+        // const tableauClientId = 'b71fab35-c242-40c1-8bb2-9785084d8eb7'; // Removed: backend now uses its own env var
+
+        // In a real application, userId would come from your authenticated user session
+        const userId = 'kelly.kline@salesforce.com'; // Replace with the actual user's email or username in Tableau Cloud
+
+        async function getTableauJwt() {
+            try {
+                // For demonstration, clientID and secretValue are sent from frontend. In production, these should be handled securely on backend.
+                // It's recommended to have your backend manage clientID and secretValue from its own environment variables.
+                const response = await fetch(`${backendUrl}/generate-jwt`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        userId: userId,
+                        // IMPORTANT: In a production environment, NEVER send clientID and secretValue directly from the frontend.
+                        // Your backend should use its own stored environment variables for these values.
+                        // clientID: tableauClientId, // Removed: backend now uses its own env var
+                        // secretValue: 'YOUR_TABLEAU_SECRET_VALUE' // Removed: backend now uses its own env var
+                    }),
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to fetch JWT');
+                }
+
+                const data = await response.json();
+                return data.token;
+            } catch (error) {
+                console.error('Error fetching JWT:', error);
+                errorMessage.textContent = `Error: ${error.message}. Please check your backend server and Tableau Connected App configuration.`;
+                errorMessage.style.display = 'block';
+                loadingMessage.style.display = 'none';
+                return null;
+            }
+        }
+
+        async function embedTableauDashboard() {
+            const jwtToken = await getTableauJwt();
+            if (jwtToken) {
+                tableauVizElement.token = jwtToken;
+                tableauVizElement.src = `${tableauCloudSiteUrl}${tableauWorkbookViewUrl}`;
+
+                //logging step
+                console.log('Tableau JWT:', jwtToken);
+                console.log('Tableau Cloud Site URL:', tableauCloudSiteUrl);
+                console.log('Tableau Workbook View URL:', tableauWorkbookViewUrl);
+                console.log('Tableau Viz Element:', tableauVizElement);
+                console.log('Loading Message:', loadingMessage);
+                console.log('Error Message:', errorMessage);
+
+                // Display the viz when it's ready
+                tableauVizElement.addEventListener('firstinteractive', () => {
+                    loadingMessage.style.display = 'none';
+                    tableauVizElement.style.display = 'block';
+                });
+
+                // Handle embedding errors
+                tableauVizElement.addEventListener('error', (event) => {
+                    console.error('Tableau Embedding Error:', event.detail);
+                    errorMessage.textContent = `Tableau Embedding Error: ${event.detail.message}. Ensure your Tableau Cloud URL and JWT are correct.`;
+                    errorMessage.style.display = 'block';
+                    loadingMessage.style.display = 'none';
+                    tableauVizElement.style.display = 'none';
+                });
+            } else {
+                errorMessage.textContent = 'Failed to retrieve JWT. Cannot embed dashboard.';
+                errorMessage.style.display = 'block';
+                loadingMessage.style.display = 'none';
+            }
+        }
+
+        embedTableauDashboard();
+    </script>
+</body>
+</html>
